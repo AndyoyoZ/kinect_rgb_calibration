@@ -71,6 +71,7 @@ private:
   std::string compression16BitExt, compression16BitString, baseNameTF;
 
   cv::Size sizeColor, sizeIr, sizeLowRes;
+  cv::Size sizeCap = cv::Size(640,480); //add by andyoyo
   libfreenect2::Frame color;
   cv::Mat cameraMatrixColor, distortionColor, cameraMatrixLowRes, cameraMatrixIr, distortionIr, cameraMatrixDepth, distortionDepth;
   cv::Mat rotation, translation;
@@ -141,8 +142,8 @@ private:
   };
 
   std::vector<ros::Publisher> imagePubs, compressedPubs;
-  ros::Publisher infoHDPub, infoQHDPub, infoIRPub;
-  sensor_msgs::CameraInfo infoHD, infoQHD, infoIR;
+  ros::Publisher infoHDPub, infoQHDPub, infoIRPub,infoCapPub;
+  sensor_msgs::CameraInfo infoHD, infoQHD, infoIR,infoCap;
   std::vector<Status> status;
 
 public:
@@ -227,6 +228,7 @@ public:
       infoHDPub.shutdown();
       infoQHDPub.shutdown();
       infoIRPub.shutdown();
+      infoCapPub.shutdown(); //add by andyoyo 2019/1/22
     }
 
     nh.shutdown();
@@ -515,8 +517,9 @@ private:
     topics[MONO_HD_RECT] = K2_TOPIC_HD K2_TOPIC_IMAGE_MONO K2_TOPIC_IMAGE_RECT;
     topics[MONO_QHD] = K2_TOPIC_QHD K2_TOPIC_IMAGE_MONO;
     topics[MONO_QHD_RECT] = K2_TOPIC_QHD K2_TOPIC_IMAGE_MONO K2_TOPIC_IMAGE_RECT;
-    topics[CAP_MONO] = "/cap_mono";
-    topics[CAP_BGR] = "/cap_bgr";
+    //add by andyoyo 2019/1/22
+    topics[CAP_MONO] = K2_TOPIC_CAP K2_TOPIC_CAP_MONO;
+    topics[CAP_BGR] =  K2_TOPIC_CAP K2_TOPIC_CAP_BGR;
 
     imagePubs.resize(COUNT);
     compressedPubs.resize(COUNT);
@@ -530,6 +533,8 @@ private:
     infoHDPub = nh.advertise<sensor_msgs::CameraInfo>(base_name + K2_TOPIC_HD + K2_TOPIC_INFO, queueSize, cb, cb);
     infoQHDPub = nh.advertise<sensor_msgs::CameraInfo>(base_name + K2_TOPIC_QHD + K2_TOPIC_INFO, queueSize, cb, cb);
     infoIRPub = nh.advertise<sensor_msgs::CameraInfo>(base_name + K2_TOPIC_SD + K2_TOPIC_INFO, queueSize, cb, cb);
+    //add by andyoyo 2019/1/22
+    infoCapPub= nh.advertise<sensor_msgs::CameraInfo>(base_name + K2_TOPIC_CAP + K2_TOPIC_INFO, queueSize, cb, cb);
   }
 
   bool initDevice(std::string &sensor)
@@ -753,6 +758,8 @@ private:
     createCameraInfo(sizeColor, cameraMatrixColor, distortionColor, cv::Mat::eye(3, 3, CV_64F), projColor, infoHD);
     createCameraInfo(sizeIr, cameraMatrixIr, distortionIr, cv::Mat::eye(3, 3, CV_64F), projIr, infoIR);
     createCameraInfo(sizeLowRes, cameraMatrixLowRes, distortionColor, cv::Mat::eye(3, 3, CV_64F), projLowRes, infoQHD);
+    //add by andyoyo 2019/1/22
+    createCameraInfo(sizeCap, cameraMatrixColor, distortionColor, cv::Mat::eye(3, 3, CV_64F), projColor, infoCap);
   }
 
   void createCameraInfo(const cv::Size &size, const cv::Mat &cameraMatrix, const cv::Mat &distortion, const cv::Mat &rotation, const cv::Mat &projection, sensor_msgs::CameraInfo &cameraInfo) const
@@ -874,7 +881,7 @@ private:
 
       status[i] = s;
     }
-    if(infoHDPub.getNumSubscribers() > 0 || infoQHDPub.getNumSubscribers() > 0)
+    if(infoHDPub.getNumSubscribers() > 0 || infoQHDPub.getNumSubscribers() > 0||infoCapPub.getNumSubscribers()>0)//add by andyoyo 2019/1/22
     {
       isSubscribedColor = true;
     }
@@ -882,6 +889,8 @@ private:
     {
       isSubscribedDepth = true;
     }
+    
+  
 
     return isSubscribedColor || isSubscribedDepth;
   }
@@ -1308,7 +1317,7 @@ private:
   {
     std::vector<sensor_msgs::ImagePtr> imageMsgs(COUNT);
     std::vector<sensor_msgs::CompressedImagePtr> compressedMsgs(COUNT);
-    sensor_msgs::CameraInfoPtr infoHDMsg,  infoQHDMsg,  infoIRMsg;
+    sensor_msgs::CameraInfoPtr infoHDMsg,  infoQHDMsg,  infoIRMsg, infoCapMsg;//add by andyoyo 2019/1/22
     std_msgs::Header _header = header;
 
     if(begin < COLOR_HD)
@@ -1330,6 +1339,11 @@ private:
       infoQHDMsg = sensor_msgs::CameraInfoPtr(new sensor_msgs::CameraInfo);
       *infoQHDMsg = infoQHD;
       infoQHDMsg->header = _header;
+
+      //add by andyoyo 2019/1/22
+      infoCapMsg = sensor_msgs::CameraInfoPtr(new sensor_msgs::CameraInfo);
+      *infoCapMsg = infoCap;
+      infoCapMsg->header = _header;
 
     }
 
@@ -1405,6 +1419,11 @@ private:
       if(infoQHDPub.getNumSubscribers() > 0)
       {
         infoQHDPub.publish(infoQHDMsg);
+      }
+      //add by andyoyo 2019/1/22
+      if(infoCapPub.getNumSubscribers() > 0)
+      {
+        infoCapPub.publish(infoCapMsg);
       }
     }
 

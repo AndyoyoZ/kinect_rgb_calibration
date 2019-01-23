@@ -30,12 +30,15 @@
 #define K2_TOPIC_HD            "/hd"
 #define K2_TOPIC_QHD           "/qhd"
 #define K2_TOPIC_SD            "/sd"
+#define K2_TOPIC_CAP           "/cap"  //add by andyoyo 2019/1/22
 
 #define K2_TOPIC_IMAGE_RECT    "_rect"
 #define K2_TOPIC_IMAGE_COLOR   "/image_color"
 #define K2_TOPIC_IMAGE_MONO    "/image_mono"
 #define K2_TOPIC_IMAGE_DEPTH   "/image_depth"
 #define K2_TOPIC_IMAGE_IR      "/image_ir"
+#define K2_TOPIC_CAP_BGR       "/cap_bgr" //add by andyoyo 2019/1/22
+#define K2_TOPIC_CAP_MONO      "/cap_mono"
 
 #define K2_TOPIC_COMPRESSED    "/compressed"
 #define K2_TOPIC_INFO          "/camera_info"

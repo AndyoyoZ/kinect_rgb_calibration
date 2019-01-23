@@ -1358,8 +1358,8 @@ int main(int argc, char **argv)
     }
   }
 
-  //std::string topicColor = "/" + ns + K2_TOPIC_HD + K2_TOPIC_IMAGE_MONO; //andyoyo 2019/1/21
-  std::string topicColor = "/kinect2/cap_mono";                            //add by andyoyo 2019/1/21
+  //std::string topicColor = "/" + ns + K2_TOPIC_HD + K2_TOPIC_IMAGE_MONO; 
+  std::string topicColor = "/" + ns + K2_TOPIC_CAP + K2_TOPIC_CAP_MONO;    //add by andyoyo 2019/1/21
   // std::string topicColor ="/" + ns +  K2_TOPIC_QHD + K2_TOPIC_IMAGE_MONO;
   std::cout<<"topicColor "<<topicColor<<std::endl;
   std::string topicIr = "/" + ns + K2_TOPIC_SD + K2_TOPIC_IMAGE_IR;

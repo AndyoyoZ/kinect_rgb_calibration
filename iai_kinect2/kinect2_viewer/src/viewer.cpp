@@ -129,6 +129,8 @@ private:
     this->mode = mode;
     running = true;
 
+    // std::string topicCameraInfoColor = topicColor.substr(0, topicColor.rfind('/')) + "/camera_info";
+    //add by andyoyo
     std::string topicCameraInfoColor = topicColor.substr(0, topicColor.rfind('/')) + "/camera_info";
     std::string topicCameraInfoDepth = topicDepth.substr(0, topicDepth.rfind('/')) + "/camera_info";
 
@@ -211,7 +213,7 @@ private:
                 const sensor_msgs::CameraInfo::ConstPtr cameraInfoColor, const sensor_msgs::CameraInfo::ConstPtr cameraInfoDepth)
   {
     cv::Mat color, depth;
-
+    
     readCameraInfo(cameraInfoColor, cameraMatrixColor);
     readCameraInfo(cameraInfoDepth, cameraMatrixDepth);
     readImage(imageColor, color);
@@ -541,7 +543,8 @@ int main(int argc, char **argv)
   }
 
   std::string ns = K2_DEFAULT_NS;
-  std::string topicColor = K2_TOPIC_QHD K2_TOPIC_IMAGE_COLOR K2_TOPIC_IMAGE_RECT;
+  // std::string topicColor = K2_TOPIC_QHD K2_TOPIC_IMAGE_COLOR K2_TOPIC_IMAGE_RECT;
+  std::string topicColor = K2_TOPIC_CAP K2_TOPIC_CAP_BGR;
   std::string topicDepth = K2_TOPIC_QHD K2_TOPIC_IMAGE_DEPTH K2_TOPIC_IMAGE_RECT;
   bool useExact = true;
   bool useCompressed = false;

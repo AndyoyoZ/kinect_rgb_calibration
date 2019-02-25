@@ -4,11 +4,33 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/visualization/cloud_viewer.h>
-#include <sensor_msgs/PointCloud2.h>
-#include <image_transport/image_transport.h>
 #include <opencv2/highgui/highgui.hpp>
 #include <cv_bridge/cv_bridge.h>
 #include "depth2cloud.hpp"
+
+//消息同步
+#include <image_transport/image_transport.h>
+#include <image_transport/subscriber_filter.h>
+#include <message_filters/subscriber.h>
+#include <message_filters/time_synchronizer.h>
+#include <sensor_msgs/Image.h>
+
+const std::string topicColor = "/kinect2/cap/cap_bgr_rect";
+const std::string topicIr = "/kinect2/sd/image_ir_rect";
+const std::string topicDepth = "/kinect2/sd/image_depth_rect";
+
+void callback(const sensor_msgs::Image::ConstPtr imageColor, const sensor_msgs::Image::ConstPtr imageIr, const sensor_msgs::Image::ConstPtr imageDepth)
+{
+    readImage(imageColor, rgb);
+    readImage(imageIr, ir);
+    readImage(imageDepth, depth);
+    //调整至与深度图相同大小
+    cv::resize(rgb,rgb,cv::Size(512,424));
+    cv::resize(ir,ir,cv::Size(512,424));
+    cv::imshow("rgb image", rgb);
+    cv::imshow("ir image", ir);
+    cv::imshow("depth image", depth);
+}
 
 int main (int argc, char** argv)
 {
@@ -34,10 +56,12 @@ int main (int argc, char** argv)
     //从yaml文件中读取相机参数（IR相机内参，RGB相机与IR相机的外参以及单应矩阵）
     trans_flag = loadyamlfiles();
 
-    image_transport::ImageTransport it(nh);  
-    image_transport::Subscriber rgbimg_sub = it.subscribe("/kinect2/cap/cap_bgr_rect", 1, rgbimageCB);
-    image_transport::Subscriber irimg_sub = it.subscribe("/kinect2/sd/image_ir_rect", 1, irimageCB);
-    image_transport::Subscriber depthimg_sub = it.subscribe("/kinect2/sd/image_depth_rect", 1, depthimageCB);
+
+    message_filters::Subscriber<sensor_msgs::Image> subImageColor(nh, topicColor, 1);   // topic1 输入
+    message_filters::Subscriber<sensor_msgs::Image> subImageIr(nh, topicIr, 1);         // topic2 输入
+    message_filters::Subscriber<sensor_msgs::Image> subImageDepth(nh, topicDepth, 1);   // topic3 输入
+    message_filters::TimeSynchronizer<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Image> sync(subImageColor, subImageIr, subImageDepth, 10);// 同步
+    sync.registerCallback(boost::bind(&callback, _1, _2, _3));                              // 回调
 
     ros::Rate rate(10.0);
 
@@ -88,6 +112,9 @@ int main (int argc, char** argv)
         ros::spinOnce();
         rate.sleep();
     }
+    cv::destroyAllWindows();
+    cv::waitKey(100);
+
 
     return 0;
 }

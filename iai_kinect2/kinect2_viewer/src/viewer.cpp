@@ -1,20 +1,3 @@
-/**
- * Copyright 2014 University of Bremen, Institute for Artificial Intelligence
- * Author: Thiemo Wiedemeyer <wiedemeyer@cs.uni-bremen.de>
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <iostream>
@@ -25,13 +8,6 @@
 #include <mutex>
 #include <thread>
 #include <chrono>
-
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl/io/pcd_io.h>
-#include <pcl/visualization/cloud_viewer.h>
-
-#include <opencv2/opencv.hpp>
 
 #include <ros/ros.h>
 #include <ros/spinner.h>
@@ -49,6 +25,8 @@
 #include <message_filters/sync_policies/approximate_time.h>
 
 #include <kinect2_bridge/kinect2_definitions.h>
+
+#include "orbslam2/System.h"
 
 class Receiver
 {
@@ -91,10 +69,11 @@ private:
   std::thread imageViewerThread;
   Mode mode;
 
-  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud;
-  pcl::PCDWriter writer;
   std::ostringstream oss;
   std::vector<int> params;
+
+  //RGBDSLAM  slam; //the slam object
+  ORB_SLAM2::System* orbslam    =nullptr;
 
 public:
   Receiver(const std::string &topicColor, const std::string &topicDepth, const bool useExact, const bool useCompressed)
@@ -111,10 +90,20 @@ public:
     params.push_back(cv::IMWRITE_PNG_STRATEGY);
     params.push_back(cv::IMWRITE_PNG_STRATEGY_RLE);
     params.push_back(0);
+
+    string orbVocFile = "/home/andyoyo/catkin_ws/src/iai_kinect2/kinect2_viewer/Vocabulary/ORBvoc.txt";
+    string orbSetiingsFile = "/home/andyoyo/catkin_ws/src/iai_kinect2/kinect2_viewer/kinect2_yaml/kinect2_sd.yaml";
+
+    orbslam = new ORB_SLAM2::System( orbVocFile, orbSetiingsFile ,ORB_SLAM2::System::RGBD, true );
   }
 
   ~Receiver()
   {
+      if (orbslam)
+      {
+          orbslam->Shutdown();
+          delete orbslam;
+      }
   }
 
   void run(const Mode mode)
@@ -123,14 +112,15 @@ public:
     stop();
   }
 
+  void finish() 
+  {
+  }
 private:
   void start(const Mode mode)
   {
     this->mode = mode;
     running = true;
 
-    // std::string topicCameraInfoColor = topicColor.substr(0, topicColor.rfind('/')) + "/camera_info";
-    //add by andyoyo
     std::string topicCameraInfoColor = topicColor.substr(0, topicColor.rfind('/')) + "/camera_info";
     std::string topicCameraInfoDepth = topicDepth.substr(0, topicDepth.rfind('/')) + "/camera_info";
 
@@ -162,24 +152,15 @@ private:
       }
       std::this_thread::sleep_for(duration);
     }
-    cloud = pcl::PointCloud<pcl::PointXYZRGBA>::Ptr(new pcl::PointCloud<pcl::PointXYZRGBA>());
-    cloud->height = color.rows;
-    cloud->width = color.cols;
-    cloud->is_dense = false;
-    cloud->points.resize(cloud->height * cloud->width);
     createLookup(this->color.cols, this->color.rows);
 
     switch(mode)
     {
-    case CLOUD:
-      cloudViewer();
-      break;
     case IMAGE:
       imageViewer();
       break;
     case BOTH:
       imageViewerThread = std::thread(&Receiver::imageViewer, this);
-      cloudViewer();
       break;
     }
   }
@@ -213,7 +194,7 @@ private:
                 const sensor_msgs::CameraInfo::ConstPtr cameraInfoColor, const sensor_msgs::CameraInfo::ConstPtr cameraInfoDepth)
   {
     cv::Mat color, depth;
-    
+
     readCameraInfo(cameraInfoColor, cameraMatrixColor);
     readCameraInfo(cameraInfoDepth, cameraMatrixDepth);
     readImage(imageColor, color);
@@ -237,21 +218,7 @@ private:
 
   void imageViewer()
   {
-    cv::Mat color, depth, depthDisp, combined;
-    std::chrono::time_point<std::chrono::high_resolution_clock> start, now;
-    double fps = 0;
-    size_t frameCount = 0;
-    std::ostringstream oss;
-    const cv::Point pos(5, 15);
-    const cv::Scalar colorText = CV_RGB(255, 255, 255);
-    const double sizeText = 0.5;
-    const int lineText = 1;
-    const int font = cv::FONT_HERSHEY_SIMPLEX;
-
-    cv::namedWindow("Image Viewer");
-    oss << "starting...";
-
-    start = std::chrono::high_resolution_clock::now();
+    cv::Mat color, depth;
     for(; running && ros::ok();)
     {
       if(updateImage)
@@ -262,117 +229,16 @@ private:
         updateImage = false;
         lock.unlock();
 
-        ++frameCount;
-        now = std::chrono::high_resolution_clock::now();
-        double elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count() / 1000.0;
-        if(elapsed >= 1.0)
+        if (orbslam)
         {
-          fps = frameCount / elapsed;
-          oss.str("");
-          oss << "fps: " << fps << " ( " << elapsed / frameCount * 1000.0 << " ms)";
-          start = now;
-          frameCount = 0;
+            orbslam->TrackRGBD( color, depth, ros::Time::now().toSec() );
         }
-
-        dispDepth(depth, depthDisp, 12000.0f);
-        combine(color, depthDisp, combined);
-        //combined = color;
-
-        cv::putText(combined, oss.str(), pos, font, sizeText, colorText, lineText, CV_AA);
-        cv::imshow("Image Viewer", combined);
       }
 
-      int key = cv::waitKey(1);
-      switch(key & 0xFF)
-      {
-      case 27:
-      case 'q':
-        running = false;
-        break;
-      case ' ':
-      case 's':
-        if(mode == IMAGE)
-        {
-          createCloud(depth, color, cloud);
-          saveCloudAndImages(cloud, color, depth, depthDisp);
-        }
-        else
-        {
-          save = true;
-        }
-        break;
-      }
     }
+
     cv::destroyAllWindows();
     cv::waitKey(100);
-  }
-
-  void cloudViewer()
-  {
-    cv::Mat color, depth;
-    pcl::visualization::PCLVisualizer::Ptr visualizer(new pcl::visualization::PCLVisualizer("Cloud Viewer"));
-    const std::string cloudName = "rendered";
-
-    lock.lock();
-    color = this->color;
-    depth = this->depth;
-    updateCloud = false;
-    lock.unlock();
-
-    createCloud(depth, color, cloud);
-
-    visualizer->addPointCloud(cloud, cloudName);
-    visualizer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, cloudName);
-    visualizer->initCameraParameters();
-    visualizer->setBackgroundColor(0, 0, 0);
-    visualizer->setPosition(mode == BOTH ? color.cols : 0, 0);
-    visualizer->setSize(color.cols, color.rows);
-    visualizer->setShowFPS(true);
-    visualizer->setCameraPosition(0, 0, 0, 0, -1, 0);
-    visualizer->registerKeyboardCallback(&Receiver::keyboardEvent, *this);
-
-    for(; running && ros::ok();)
-    {
-      if(updateCloud)
-      {
-        lock.lock();
-        color = this->color;
-        depth = this->depth;
-        updateCloud = false;
-        lock.unlock();
-
-        createCloud(depth, color, cloud);
-
-        visualizer->updatePointCloud(cloud, cloudName);
-      }
-      if(save)
-      {
-        save = false;
-        cv::Mat depthDisp;
-        dispDepth(depth, depthDisp, 12000.0f);
-        saveCloudAndImages(cloud, color, depth, depthDisp);
-      }
-      visualizer->spinOnce(10);
-    }
-    visualizer->close();
-  }
-
-  void keyboardEvent(const pcl::visualization::KeyboardEvent &event, void *)
-  {
-    if(event.keyUp())
-    {
-      switch(event.getKeyCode())
-      {
-      case 27:
-      case 'q':
-        running = false;
-        break;
-      case ' ':
-      case 's':
-        save = true;
-        break;
-      }
-    }
   }
 
   void readImage(const sensor_msgs::Image::ConstPtr msgImage, cv::Mat &image) const
@@ -432,62 +298,6 @@ private:
     }
   }
 
-  void createCloud(const cv::Mat &depth, const cv::Mat &color, pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &cloud) const
-  {
-    const float badPoint = std::numeric_limits<float>::quiet_NaN();
-
-    #pragma omp parallel for
-    for(int r = 0; r < depth.rows; ++r)
-    {
-      pcl::PointXYZRGBA *itP = &cloud->points[r * depth.cols];
-      const uint16_t *itD = depth.ptr<uint16_t>(r);
-      const cv::Vec3b *itC = color.ptr<cv::Vec3b>(r);
-      const float y = lookupY.at<float>(0, r);
-      const float *itX = lookupX.ptr<float>();
-
-      for(size_t c = 0; c < (size_t)depth.cols; ++c, ++itP, ++itD, ++itC, ++itX)
-      {
-        register const float depthValue = *itD / 1000.0f;
-        // Check for invalid measurements
-        if(*itD == 0)
-        {
-          // not valid
-          itP->x = itP->y = itP->z = badPoint;
-          itP->rgba = 0;
-          continue;
-        }
-        itP->z = depthValue;
-        itP->x = *itX * depthValue;
-        itP->y = y * depthValue;
-        itP->b = itC->val[0];
-        itP->g = itC->val[1];
-        itP->r = itC->val[2];
-        itP->a = 255;
-      }
-    }
-  }
-
-  void saveCloudAndImages(const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr cloud, const cv::Mat &color, const cv::Mat &depth, const cv::Mat &depthColored)
-  {
-    oss.str("");
-    oss << "./" << std::setfill('0') << std::setw(4) << frame;
-    const std::string baseName = oss.str();
-    const std::string cloudName = baseName + "_cloud.pcd";
-    const std::string colorName = baseName + "_color.jpg";
-    const std::string depthName = baseName + "_depth.png";
-    const std::string depthColoredName = baseName + "_depth_colored.png";
-
-    OUT_INFO("saving cloud: " << cloudName);
-    writer.writeBinary(cloudName, *cloud);
-    OUT_INFO("saving color: " << colorName);
-    cv::imwrite(colorName, color, params);
-    OUT_INFO("saving depth: " << depthName);
-    cv::imwrite(depthName, depth, params);
-    OUT_INFO("saving depth: " << depthColoredName);
-    cv::imwrite(depthColoredName, depthColored, params);
-    OUT_INFO("saving complete!");
-    ++frame;
-  }
 
   void createLookup(size_t width, size_t height)
   {
@@ -513,110 +323,28 @@ private:
   }
 };
 
-void help(const std::string &path)
-{
-  std::cout << path << FG_BLUE " [options]" << std::endl
-            << FG_GREEN "  name" NO_COLOR ": " FG_YELLOW "'any string'" NO_COLOR " equals to the kinect2_bridge topic base name" << std::endl
-            << FG_GREEN "  mode" NO_COLOR ": " FG_YELLOW "'qhd'" NO_COLOR ", " FG_YELLOW "'hd'" NO_COLOR ", " FG_YELLOW "'sd'" NO_COLOR " or " FG_YELLOW "'ir'" << std::endl
-            << FG_GREEN "  visualization" NO_COLOR ": " FG_YELLOW "'image'" NO_COLOR ", " FG_YELLOW "'cloud'" NO_COLOR " or " FG_YELLOW "'both'" << std::endl
-            << FG_GREEN "  options" NO_COLOR ":" << std::endl
-            << FG_YELLOW "    'compressed'" NO_COLOR " use compressed instead of raw topics" << std::endl
-            << FG_YELLOW "    'approx'" NO_COLOR " use approximate time synchronization" << std::endl;
-}
-
 int main(int argc, char **argv)
 {
-#if EXTENDED_OUTPUT
-  ROSCONSOLE_AUTOINIT;
-  if(!getenv("ROSCONSOLE_FORMAT"))
-  {
-    ros::console::g_formatter.tokens_.clear();
-    ros::console::g_formatter.init("[${severity}] ${message}");
-  }
-#endif
-
-  ros::init(argc, argv, "kinect2_viewer", ros::init_options::AnonymousName);
+  ros::init(argc, argv, "kinect2_slam", ros::init_options::AnonymousName);
 
   if(!ros::ok())
   {
     return 0;
   }
-
-  std::string ns = K2_DEFAULT_NS;
-  // std::string topicColor = K2_TOPIC_QHD K2_TOPIC_IMAGE_COLOR K2_TOPIC_IMAGE_RECT;
-  std::string topicColor = K2_TOPIC_CAP K2_TOPIC_CAP_BGR;
-  std::string topicDepth = K2_TOPIC_QHD K2_TOPIC_IMAGE_DEPTH K2_TOPIC_IMAGE_RECT;
+  std::string topicColor = "/kinect2/sd/image_color_rect";
+  std::string topicDepth = "/kinect2/sd/image_depth_rect";
   bool useExact = true;
   bool useCompressed = false;
-  Receiver::Mode mode = Receiver::CLOUD;
-
-  for(size_t i = 1; i < (size_t)argc; ++i)
-  {
-    std::string param(argv[i]);
-
-    if(param == "-h" || param == "--help" || param == "-?" || param == "--?")
-    {
-      help(argv[0]);
-      ros::shutdown();
-      return 0;
-    }
-    else if(param == "qhd")
-    {
-      topicColor = K2_TOPIC_QHD K2_TOPIC_IMAGE_COLOR K2_TOPIC_IMAGE_RECT;
-      topicDepth = K2_TOPIC_QHD K2_TOPIC_IMAGE_DEPTH K2_TOPIC_IMAGE_RECT;
-    }
-    else if(param == "hd")
-    {
-      topicColor = K2_TOPIC_HD K2_TOPIC_IMAGE_COLOR K2_TOPIC_IMAGE_RECT;
-      topicDepth = K2_TOPIC_HD K2_TOPIC_IMAGE_DEPTH K2_TOPIC_IMAGE_RECT;
-    }
-    else if(param == "ir")
-    {
-      topicColor = K2_TOPIC_SD K2_TOPIC_IMAGE_IR K2_TOPIC_IMAGE_RECT;
-      topicDepth = K2_TOPIC_SD K2_TOPIC_IMAGE_DEPTH K2_TOPIC_IMAGE_RECT;
-    }
-    else if(param == "sd")
-    {
-      topicColor = K2_TOPIC_SD K2_TOPIC_IMAGE_COLOR K2_TOPIC_IMAGE_RECT;
-      topicDepth = K2_TOPIC_SD K2_TOPIC_IMAGE_DEPTH K2_TOPIC_IMAGE_RECT;
-    }
-    else if(param == "approx")
-    {
-      useExact = false;
-    }
-
-    else if(param == "compressed")
-    {
-      useCompressed = true;
-    }
-    else if(param == "image")
-    {
-      mode = Receiver::IMAGE;
-    }
-    else if(param == "cloud")
-    {
-      mode = Receiver::CLOUD;
-    }
-    else if(param == "both")
-    {
-      mode = Receiver::BOTH;
-    }
-    else
-    {
-      ns = param;
-    }
-  }
-
-  topicColor = "/" + ns + topicColor;
-  topicDepth = "/" + ns + topicDepth;
-  OUT_INFO("topic color: " FG_CYAN << topicColor << NO_COLOR);
-  OUT_INFO("topic depth: " FG_CYAN << topicDepth << NO_COLOR);
-
+  Receiver::Mode mode = Receiver::IMAGE;
+  // 初始化receiver
   Receiver receiver(topicColor, topicDepth, useExact, useCompressed);
 
-  OUT_INFO("starting receiver...");
+  //OUT_INFO("starting receiver...");
   receiver.run(mode);
 
+  receiver.finish();
+
   ros::shutdown();
+
   return 0;
 }

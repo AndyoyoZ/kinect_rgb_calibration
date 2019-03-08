@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(kinect2_viewer CXX)
 
+
+LIST(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBT_USE_DOUBLE_PRECISION -Wall")
 # Unused warnings
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wuninitialized -Winit-self -Wunused-function -Wunused-label -Wunused-variable -Wunused-but-set-variable -Wunused-but-set-parameter")
@@ -22,9 +25,12 @@ ENDIF()
 find_package(catkin REQUIRED COMPONENTS roscpp rostime std_msgs sensor_msgs message_filters cv_bridge image_transport compressed_image_transport compressed_depth_image_transport kinect2_bridge)
 
 ## System dependencies are found with CMake's conventions
-find_package(OpenCV REQUIRED)
+find_package(OpenCV 3 REQUIRED)
 find_package(OpenMP)
-find_package(PCL REQUIRED)
+find_package(PCL 1.8 REQUIRED)
+
+find_package(Pangolin REQUIRED)
+find_package( G2O REQUIRED )
 
 if(OPENMP_FOUND)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
@@ -66,6 +72,9 @@ include_directories(include
   ${catkin_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
+
+  ${Pangolin_INCLUDE_DIRS}
+
   ${kinect2_bridge_INCLUDE_DIRS}
 )
 
@@ -75,6 +84,10 @@ target_link_libraries(kinect2_viewer
   ${OpenCV_LIBRARIES}
   ${PCL_LIBRARIES}
   ${kinect2_bridge_LIBRARIES}
+  ${Pangolin_LIBRARIES}
+  DBoW2
+  ORB_SLAM2
+g2o_core g2o_types_slam3d g2o_solver_csparse g2o_stuff g2o_csparse_extension g2o_types_sim3 g2o_types_sba
 )
 
 #############

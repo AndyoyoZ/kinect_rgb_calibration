@@ -1,5 +1,9 @@
 # Kinect2 Viewer
 
+
+注意：
+根据高博的　ORBSLAM2 with PointCloud ，对该文件进行了修改，启动该节点时，会调用ORBSLAM2，因此需先安装ORBSLAM2
+
 ## Maintainer
 
 - [Thiemo Wiedemeyer](https://ai.uni-bremen.de/team/thiemo_wiedemeyer) <<wiedemeyer@cs.uni-bremen.de>>, [Institute for Artificial Intelligence](http://ai.uni-bremen.de/), University of Bremen

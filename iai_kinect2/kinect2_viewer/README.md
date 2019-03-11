@@ -2,7 +2,7 @@
 
 
 注意：
-根据高博的　ORBSLAM2 with PointCloud ，对该文件进行了修改，启动该节点时，会调用ORBSLAM2，因此需先安装ORBSLAM2，也可使用备份的原文件（viewer.cpp.back）进行编译，使用kinect2_viewer的正常功能。
+根据高博的　ORBSLAM2 with PointCloud ，对viewer.cpp文件进行了修改，启动该节点时，会调用ORBSLAM2，因此需先安装ORBSLAM2，也可使用备份的原文件（viewer.cpp.back）进行编译，使用kinect2_viewer的正常功能。
 
 ## Maintainer
 

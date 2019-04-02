@@ -1,0 +1,7 @@
+<launch>
+
+ <node name = "rgbd_slam_node" pkg = "rgbd_slam" type = "rgbd_slam_node" 
+       args = "/home/communicationgroup/catkin_ws/src/rgbd_slam/ORB_SLAM2_modified/Vocabulary/ORBvoc.txt  /home/communicationgroup/catkin_ws/src/rgbd_slam/ORB_SLAM2_modified/yaml/kinect2.yaml" 
+       respawn = "true" output = "screen" />
+
+</launch>
